@@ -10,7 +10,7 @@ In the spirit of [`lazygit`](https://github.com/jesseduffield/lazygit) and [`yaz
 [![Bubble Tea](https://img.shields.io/badge/TUI-Bubble%20Tea-ff69b4)](https://github.com/charmbracelet/bubbletea)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-![Matches tab](docs/screenshots/matches.png)
+![Knockout bracket](docs/screenshots/standings-bracket.png)
 
 </div>
 
@@ -20,28 +20,31 @@ In the spirit of [`lazygit`](https://github.com/jesseduffield/lazygit) and [`yaz
 
 - 📅 **Matches** — fixtures and live scores, filterable by **All / Live / Today / Upcoming / Finished**, with counts next to each filter and winners highlighted.
 - 🔴 **Live updates** — in-play games get a `LIVE` badge and the board auto-refreshes every 30 seconds.
-- 🏆 **Standings** — full group tables (P / W / D / L / GF / GA / GD / Pts) with qualification spots highlighted.
+- 🏆 **Standings** — switch the left panel between an ASCII **knockout bracket** (winners highlighted, a champion banner, third-place play-off) and the full **group tables** (P / W / D / L / GF / GA / GD / Pts) with qualification spots highlighted.
 - 👟 **Top scorers** — the Golden Boot race with goals and assists.
 - ⌨️ **Keyboard-driven** — vim-style navigation, tabs, and filters; no mouse needed.
 - 💾 **Rate-limit friendly** — responses are cached on disk, so browsing never burns through the free API tier.
 
 ## Screenshots
 
-<p align="center"><b>Matches</b></p>
+<p align="center"><b>Matches</b> — fixtures &amp; live scores, filterable</p>
 <p align="center"><img src="docs/screenshots/matches.png" alt="Matches tab" width="720" /></p>
 
-<p align="center"><b>Standings</b></p>
-<p align="center"><img src="docs/screenshots/standings.png" alt="Standings tab" width="720" /></p>
+<p align="center"><b>Standings · Brackets</b> — the knockout tree</p>
+<p align="center"><img src="docs/screenshots/standings-bracket.png" alt="Standings tab showing the knockout bracket" width="720" /></p>
 
-<p align="center"><b>Top Scorers</b></p>
-<p align="center"><img src="docs/screenshots/scorers.png" alt="Scorers tab" width="720" /></p>
+<p align="center"><b>Standings · Group Stage</b> — switch views in the left panel with <code>f</code></p>
+<p align="center"><img src="docs/screenshots/standings-groups.png" alt="Standings tab showing the group-stage tables" width="720" /></p>
+
+<p align="center"><b>Top Scorers</b> — the Golden Boot race</p>
+<p align="center"><img src="docs/screenshots/scorers.png" alt="Top scorers tab" width="720" /></p>
 
 ## Install
 
 Requires [Go 1.26+](https://go.dev/dl/).
 
 ```bash
-git clone https://github.com/iliutaadrian/wc26.git
+git clone https://github.com/iliutaadrian/wc26-cli.git
 cd wc26
 go build -o wc26 .
 ```
@@ -49,7 +52,7 @@ go build -o wc26 .
 Or install it straight onto your `PATH`:
 
 ```bash
-go install github.com/iliutaadrian/wc26@latest   # puts `wc26` in $(go env GOPATH)/bin
+go install github.com/iliutaadrian/wc26-cli@latest   # puts `wc26` in $(go env GOPATH)/bin
 ```
 
 ## Setup
@@ -81,7 +84,7 @@ go install github.com/iliutaadrian/wc26@latest   # puts `wc26` in $(go env GOPAT
 | `tab` / `h` `l` | switch tabs |
 | `j` `k` / `↑` `↓` | move selection |
 | `g` / `G` | jump to top / bottom |
-| `f` / `F` | cycle match filter forward / back |
+| `f` / `F` | Matches: cycle filter · Standings: switch Brackets ⇄ Group Stage |
 | `r` | refresh the current tab from the API |
 | `?` | toggle help |
 | `q` | quit |
@@ -116,7 +119,8 @@ wc26/
 │   │   └── types.go        # JSON response types
 │   └── ui/
 │       ├── model.go        # Bubble Tea model, update loop, keybindings
-│       ├── views.go        # rendering for each tab + data filters
+│       ├── views.go        # rendering for Matches / Standings / Scorers + filters
+│       ├── bracket.go      # the knockout-bracket layout & renderer
 │       └── styles.go       # Lipgloss styles / palette
 └── docs/screenshots/       # images used in this README
 ```
