@@ -7,7 +7,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/iliutaadrian/wc26/internal/api"
+	"github.com/iliutaadrian/wc26-cli/internal/api"
 )
 
 func ip(v int) *int { return &v }
@@ -54,13 +54,15 @@ func TestViewsRender(t *testing.T) {
 
 	for _, tc := range []struct {
 		tab  tab
+		mode standingsMode
 		want string
 	}{
-		{tabMatches, "MEX"},
-		{tabStandings, "Group A"},
-		{tabScorers, "Giménez"},
+		{tabMatches, modeBracket, "MEX"},
+		{tabStandings, modeGroups, "Group A"},
+		{tabScorers, modeBracket, "Giménez"},
 	} {
 		m.active = tc.tab
+		m.stdMode = tc.mode
 		out := m.View()
 		if strings.TrimSpace(out) == "" {
 			t.Fatalf("tab %s rendered empty", tc.tab)
@@ -68,6 +70,86 @@ func TestViewsRender(t *testing.T) {
 		if !strings.Contains(out, tc.want) {
 			t.Errorf("tab %s: expected output to contain %q\n---\n%s", tc.tab, tc.want, out)
 		}
+	}
+}
+
+// bracketModel builds a model with a full knockout stage (QF → SF → Final
+// + third place) for exercising the Bracket tab.
+func bracketModel(t *testing.T) Model {
+	t.Helper()
+	m := New(nil)
+	mm, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 36})
+	m = mm.(Model)
+
+	base := time.Date(2026, 7, 1, 18, 0, 0, 0, time.UTC)
+	fin := func(id int, stage string, h, a string, hs, as int) api.Match {
+		win := "HOME_TEAM"
+		if as > hs {
+			win = "AWAY_TEAM"
+		}
+		return api.Match{ID: id, Stage: stage, Status: "FINISHED",
+			UTCDate:  base.Add(time.Duration(id) * time.Hour),
+			HomeTeam: api.Team{TLA: h, Name: h}, AwayTeam: api.Team{TLA: a, Name: a},
+			Score: api.Score{Winner: win, FullTime: api.ScoreLine{Home: ip(hs), Away: ip(as)}}}
+	}
+
+	matches := &api.MatchesResponse{Matches: []api.Match{
+		fin(1, "QUARTER_FINALS", "BRA", "CRO", 2, 1),
+		fin(2, "QUARTER_FINALS", "NED", "ARG", 0, 2),
+		fin(3, "QUARTER_FINALS", "ENG", "FRA", 1, 2),
+		fin(4, "QUARTER_FINALS", "MAR", "POR", 1, 0),
+		fin(5, "SEMI_FINALS", "BRA", "ARG", 3, 0),
+		fin(6, "SEMI_FINALS", "FRA", "MAR", 2, 0),
+		fin(7, "THIRD_PLACE", "ARG", "MAR", 2, 1),
+		fin(8, "FINAL", "BRA", "FRA", 3, 2),
+	}}
+	mm, _ = m.Update(matchesMsg{resp: matches})
+	m = mm.(Model)
+	// The bracket now lives inside the Standings tab (default sub-view).
+	m.active = tabStandings
+	m.stdMode = modeBracket
+	return m
+}
+
+func TestBracketRenders(t *testing.T) {
+	m := bracketModel(t)
+	out := m.View()
+	for _, want := range []string{"Quarter-finals", "Semi-finals", "Final", "🏆", "BRA", "3rd place"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("bracket view missing %q\n---\n%s", want, out)
+		}
+	}
+	t.Logf("\n%s", out)
+}
+
+func TestBracketNarrowAndScroll(t *testing.T) {
+	m := bracketModel(t)
+	// Narrow terminal: only the latest rounds fit; expect a hidden-rounds note.
+	mm, _ := m.Update(tea.WindowSizeMsg{Width: 44, Height: 18})
+	m = mm.(Model)
+	out := m.View()
+	if !strings.Contains(out, "earlier round") {
+		t.Errorf("narrow bracket should note hidden rounds\n---\n%s", out)
+	}
+	// Over-scrolling must not panic and stays clamped.
+	m.bracketScroll = 9999
+	m.clampCursors()
+	if m.bracketScroll > m.maxBracketScroll() {
+		t.Errorf("bracketScroll %d exceeds max %d", m.bracketScroll, m.maxBracketScroll())
+	}
+	if strings.TrimSpace(m.View()) == "" {
+		t.Error("over-scrolled bracket rendered empty")
+	}
+}
+
+// Empty state: no knockout matches yet.
+func TestBracketEmpty(t *testing.T) {
+	m := mockModel(t)
+	m.active = tabStandings
+	m.stdMode = modeBracket
+	out := m.View()
+	if !strings.Contains(out, "knockout bracket appears") {
+		t.Errorf("expected empty-state message\n---\n%s", out)
 	}
 }
 

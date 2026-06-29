@@ -1,4 +1,4 @@
-module github.com/iliutaadrian/wc26
+module github.com/iliutaadrian/wc26-cli
 
 go 1.26
 

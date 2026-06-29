@@ -6,7 +6,7 @@ import (
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/iliutaadrian/wc26/internal/api"
+	"github.com/iliutaadrian/wc26-cli/internal/api"
 )
 
 type tab int
@@ -26,6 +26,26 @@ func (t tab) String() string {
 		return "Standings"
 	case tabScorers:
 		return "Scorers"
+	}
+	return ""
+}
+
+// standingsMode selects what the Standings tab shows: the knockout bracket
+// or the group-stage tables. Toggled in the left panel (default: bracket).
+type standingsMode int
+
+const (
+	modeBracket standingsMode = iota
+	modeGroups
+	modeCount
+)
+
+func (s standingsMode) String() string {
+	switch s {
+	case modeBracket:
+		return "Brackets"
+	case modeGroups:
+		return "Group Stage"
 	}
 	return ""
 }
@@ -102,10 +122,13 @@ type Model struct {
 	standings        []api.Standing
 	groupCursor      int
 	standingsLoaded  bool
+	stdMode          standingsMode
 
 	scorers        []api.Scorer
 	scorerCursor   int
 	scorersLoaded  bool
+
+	bracketScroll int
 
 	lastUpdated time.Time
 }
@@ -149,9 +172,18 @@ func (m Model) loadScorers(fresh bool) tea.Cmd {
 func (m *Model) loadForTab() tea.Cmd {
 	switch m.active {
 	case tabStandings:
+		// The Standings tab shows either the bracket (derived from the
+		// matches feed) or the group tables, so both feeds may be needed.
+		var cmds []tea.Cmd
 		if !m.standingsLoaded {
+			cmds = append(cmds, m.loadStandings(false))
+		}
+		if !m.matchesLoaded {
+			cmds = append(cmds, m.loadMatches(false))
+		}
+		if len(cmds) > 0 {
 			m.loading = true
-			return m.loadStandings(false)
+			return tea.Batch(cmds...)
 		}
 	case tabScorers:
 		if !m.scorersLoaded {
@@ -302,22 +334,31 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case tabMatches:
 			return m, tea.Batch(m.spinner.Tick, m.loadMatches(true))
 		case tabStandings:
+			if m.stdMode == modeBracket {
+				return m, tea.Batch(m.spinner.Tick, m.loadMatches(true))
+			}
 			return m, tea.Batch(m.spinner.Tick, m.loadStandings(true))
 		case tabScorers:
 			return m, tea.Batch(m.spinner.Tick, m.loadScorers(true))
 		}
 
 	case "f":
-		if m.active == tabMatches {
+		switch m.active {
+		case tabMatches:
 			m.matchFilter = (m.matchFilter + 1) % filterCount
 			m.matchCursor = 0
+		case tabStandings:
+			m.stdMode = (m.stdMode + 1) % modeCount
 		}
 		return m, nil
 
 	case "F", "shift+f":
-		if m.active == tabMatches {
+		switch m.active {
+		case tabMatches:
 			m.matchFilter = (m.matchFilter - 1 + filterCount) % filterCount
 			m.matchCursor = 0
+		case tabStandings:
+			m.stdMode = (m.stdMode - 1 + modeCount) % modeCount
 		}
 		return m, nil
 
@@ -343,7 +384,11 @@ func (m *Model) moveCursor(delta int) {
 	case tabMatches:
 		m.matchCursor += delta
 	case tabStandings:
-		m.groupCursor += delta
+		if m.stdMode == modeBracket {
+			m.bracketScroll += delta
+		} else {
+			m.groupCursor += delta
+		}
 	case tabScorers:
 		m.scorerCursor += delta
 	}
@@ -355,7 +400,11 @@ func (m *Model) setCursor(v int) {
 	case tabMatches:
 		m.matchCursor = v
 	case tabStandings:
-		m.groupCursor = v
+		if m.stdMode == modeBracket {
+			m.bracketScroll = v
+		} else {
+			m.groupCursor = v
+		}
 	case tabScorers:
 		m.scorerCursor = v
 	}
@@ -366,6 +415,7 @@ func (m *Model) clampCursors() {
 	m.matchCursor = clamp(m.matchCursor, 0, len(m.filteredMatches())-1)
 	m.groupCursor = clamp(m.groupCursor, 0, len(m.standings)-1)
 	m.scorerCursor = clamp(m.scorerCursor, 0, len(m.scorers)-1)
+	m.bracketScroll = clamp(m.bracketScroll, 0, m.maxBracketScroll())
 }
 
 func clamp(v, lo, hi int) int {

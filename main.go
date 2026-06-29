@@ -10,8 +10,8 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/iliutaadrian/wc26/internal/api"
-	"github.com/iliutaadrian/wc26/internal/ui"
+	"github.com/iliutaadrian/wc26-cli/internal/api"
+	"github.com/iliutaadrian/wc26-cli/internal/ui"
 )
 
 func main() {

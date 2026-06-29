@@ -59,6 +59,18 @@ var (
 
 	winStyle = lipgloss.NewStyle().Bold(true).Foreground(colWin)
 
+	loseStyle = lipgloss.NewStyle().Foreground(colDim)
+
+	champStyle = lipgloss.NewStyle().
+			Bold(true).
+			Foreground(lipgloss.Color("231")).
+			Background(colAccent).
+			Padding(0, 1)
+
+	liveDot = lipgloss.NewStyle().Bold(true).Foreground(colLive)
+
+	bracketConn = lipgloss.NewStyle().Foreground(colDim)
+
 	footerStyle = lipgloss.NewStyle().Foreground(colDim)
 
 	statusOK  = lipgloss.NewStyle().Foreground(colGreen)

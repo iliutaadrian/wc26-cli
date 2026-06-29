@@ -8,7 +8,7 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/iliutaadrian/wc26/internal/api"
+	"github.com/iliutaadrian/wc26-cli/internal/api"
 )
 
 // --- data helpers ---
@@ -137,8 +137,11 @@ func (m Model) footerView() string {
 		hk("j/k") + " move",
 		hk("r") + " refresh",
 	}
-	if m.active == tabMatches {
+	switch m.active {
+	case tabMatches:
 		keys = append(keys, hk("f")+" filter:"+m.matchFilter.String())
+	case tabStandings:
+		keys = append(keys, hk("f")+" view:"+m.stdMode.String())
 	}
 	keys = append(keys, hk("?")+" help", hk("q")+" quit")
 	return footerStyle.Render(strings.Join(keys, "   "))
@@ -263,21 +266,46 @@ func (m Model) matchRow(mt api.Match, selected bool, width int) string {
 // --- Standings tab ---
 
 func (m Model) standingsView(height int) string {
-	leftW := 16
+	leftW := standingsLeftW
+
+	// Left pane: view toggle (Brackets / Group Stage), plus a group picker
+	// when the group-stage view is active.
 	var gl strings.Builder
-	gl.WriteString(paneTitle.Render("Groups") + "\n\n")
-	if len(m.standings) == 0 {
-		gl.WriteString(dimStyle.Render("  none yet"))
-	}
-	for i, s := range m.standings {
+	gl.WriteString(paneTitle.Render("View") + "\n\n")
+	for s := modeBracket; s < modeCount; s++ {
 		marker := "  "
 		style := textStyle
-		if i == m.groupCursor {
+		if s == m.stdMode {
 			marker = "▸ "
 			style = winStyle
 		}
-		gl.WriteString(style.Render(marker+groupLabel(s)) + "\n")
+		gl.WriteString(style.Render(marker+s.String()) + "\n")
 	}
+	if m.stdMode == modeGroups {
+		gl.WriteString("\n" + paneTitle.Render("Groups") + "\n\n")
+		if len(m.standings) == 0 {
+			gl.WriteString(dimStyle.Render("  none yet"))
+		}
+		groupLines := make([]string, 0, len(m.standings))
+		for i, s := range m.standings {
+			marker := "  "
+			style := textStyle
+			if i == m.groupCursor {
+				marker = "▸ "
+				style = winStyle
+			}
+			groupLines = append(groupLines, style.Render(marker+groupLabel(s)))
+		}
+		// Window the group list so a full 12-group stage can't outgrow the
+		// pane and push the layout past the terminal height. The chrome above
+		// (View toggle + headings) and below ("f switch") is 9 fixed lines.
+		budget := (height - 2) - 9
+		if budget < 1 {
+			budget = 1
+		}
+		gl.WriteString(renderWindow(groupLines, m.groupCursor, budget))
+	}
+	gl.WriteString("\n" + dimStyle.Render("f switch"))
 	left := paneBorder.Width(leftW).Height(height - 2).Render(gl.String())
 
 	rightW := m.width - lipgloss.Width(left) - 2
@@ -285,13 +313,15 @@ func (m Model) standingsView(height int) string {
 		rightW = 30
 	}
 
-	var table string
-	if m.groupCursor >= 0 && m.groupCursor < len(m.standings) {
-		table = m.standingTable(m.standings[m.groupCursor])
+	var body string
+	if m.stdMode == modeBracket {
+		body = m.bracketBody(height)
+	} else if m.groupCursor >= 0 && m.groupCursor < len(m.standings) {
+		body = m.standingTable(m.standings[m.groupCursor])
 	} else {
-		table = dimStyle.Render("Standings appear once the group stage begins.")
+		body = dimStyle.Render("Standings appear once the group stage begins.")
 	}
-	right := paneBorderActive.Width(rightW).Height(height - 2).Render(table)
+	right := paneBorderActive.Width(rightW).Height(height - 2).Render(body)
 
 	return lipgloss.JoinHorizontal(lipgloss.Top, left, right)
 }
@@ -402,11 +432,11 @@ func (m Model) helpView() string {
 	lines := []string{
 		titleStyle.Render("⚽ World Cup 2026 — Help"),
 		"",
-		hk("1 / 2 / 3") + "    jump to Matches / Standings / Scorers",
+		hk("1 / 2 / 3") + "        jump to Matches / Standings / Scorers",
 		hk("tab / h l") + "    switch tabs",
-		hk("j / k") + "        move selection (also ↑ ↓)",
+		hk("j / k") + "        move selection / scroll bracket (also ↑ ↓)",
 		hk("g / G") + "        jump to top / bottom",
-		hk("f") + "            cycle match filter (All/Live/Today/Upcoming/Finished)",
+		hk("f") + "            Matches: cycle filter · Standings: Brackets ⇄ Group Stage",
 		hk("r") + "            refresh current tab from the API",
 		hk("?") + "            toggle this help",
 		hk("q") + "            quit",
